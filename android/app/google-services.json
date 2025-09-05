@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "436329415809",
+    "project_id": "dog-match-app-fb26e",
+    "storage_bucket": "dog-match-app-fb26e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:436329415809:android:6a21585c797f0e9c737980",
+        "android_client_info": {
+          "package_name": "com.dds.dog_match_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlNFyVm6XotYMrTjQPsgmwiIPsAvDfVMc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:436329415809:android:c3e773e153f2b0a1737980",
+        "android_client_info": {
+          "package_name": "com.example.dog_match_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlNFyVm6XotYMrTjQPsgmwiIPsAvDfVMc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

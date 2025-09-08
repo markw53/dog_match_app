@@ -1,13 +1,13 @@
 import 'dart:io';
-
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 
-import 'chat_screen.dart';
-import 'matches_screen.dart';
+import 'chat_screen.dart'; // Your ChatScreen implementation
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,17 +22,32 @@ class _HomeScreenState extends State<HomeScreen> {
   final ageCtrl = TextEditingController();
   File? _pickedImage;
 
-  // --- Pick Image from Gallery ---
+  double _searchRadiusKm = 20; // default radius
+  Position? _currentPosition; // cache current location
+
+  // --- Pick image (gallery/camera) ---
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: source, imageQuality: 70);
-
     if (picked != null) {
       setState(() => _pickedImage = File(picked.path));
     }
   }
 
-  // --- Add Dog Profile to Firestore ---
+  // --- Get current location ---
+  Future<GeoFirePoint> _getCurrentLocation() async {
+    LocationPermission permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw Exception("Location permission denied. Please enable it.");
+    }
+    final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+    _currentPosition = pos; // save to state
+    return GeoFirePoint(GeoPoint(pos.latitude, pos.longitude));
+  }
+
+  // --- Add Dog ---
   Future<void> _addDog() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -47,12 +62,15 @@ class _HomeScreenState extends State<HomeScreen> {
       imageUrl = await storageRef.getDownloadURL();
     }
 
+    final geoPoint = await _getCurrentLocation();
+
     await FirebaseFirestore.instance.collection('dogs').add({
       'ownerId': uid,
       'name': nameCtrl.text.trim(),
       'breed': breedCtrl.text.trim(),
       'age': int.tryParse(ageCtrl.text.trim()) ?? 0,
       'photoUrl': imageUrl,
+      'position': geoPoint.data, // 👈 geohash + geopoint
       'createdAt': FieldValue.serverTimestamp(),
     });
 
@@ -63,70 +81,46 @@ class _HomeScreenState extends State<HomeScreen> {
       ageCtrl.clear();
     });
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text("Dog added!")));
+        .showSnackBar(const SnackBar(content: Text("✅ Dog profile added")));
   }
 
-  // --- Like a Dog & Check for Mutual Match ---
-  Future<void> _likeDog(String dogId, String ownerId) async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final likesRef = FirebaseFirestore.instance.collection('likes');
-    final matchesRef = FirebaseFirestore.instance.collection('matches');
+  // --- Geo Query ---
+  Stream<List<DocumentSnapshot>> _geoQueryNearbyDogs() async* {
+    final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+    _currentPosition = pos; // cache user location
 
-    // Save like
-    await likesRef.add({
-      'likerId': uid,
-      'likedDogId': dogId,
-      'dogOwnerId': ownerId,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    final center = GeoFirePoint(GeoPoint(pos.latitude, pos.longitude));
+    final collectionRef = FirebaseFirestore.instance.collection('dogs');
 
-    // Get my dogs
-    // final myDogs = await FirebaseFirestore.instance
-    //     .collection('dogs')
-    //     .where('ownerId', isEqualTo: uid)
-    //     .get();
-    // final myDogIds = myDogs.docs.map((d) => d.id).toList();
+    yield* GeoCollectionReference(collectionRef).subscribeWithin(
+      center: center,
+      radiusInKm: _searchRadiusKm,
+      field: 'position',
+      geopointFrom: (doc) => (doc['position']['geopoint'] as GeoPoint),
+    );
+  }
 
-    // Did the other user like one of my dogs?
-    final mutual = await likesRef
-        .where('likerId', isEqualTo: ownerId)
-        .where('dogOwnerId', isEqualTo: uid)
-        .get();
-
-    if (mutual.docs.isNotEmpty) {
-      // Create Match
-      await matchesRef.add({
-        'users': [uid, ownerId],
-        'dogIds': [dogId, mutual.docs.first['likedDogId']],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // ✅ Only show Snackbar if this widget is still mounted
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("🎉 It's a Match! You can now chat.")),
-      );
-    }
+  // --- Calculate distance in km ---
+  double _calculateDistance(GeoPoint dogPoint) {
+    if (_currentPosition == null) return 0;
+    final distanceInMeters = Geolocator.distanceBetween(
+      _currentPosition!.latitude,
+      _currentPosition!.longitude,
+      dogPoint.latitude,
+      dogPoint.longitude,
+    );
+    return distanceInMeters / 1000.0; // km
   }
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Dog Profiles"),
+        title: const Text("Nearby Dogs"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.favorite), // ❤️ Matches button
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (ctx) => const MatchesScreen()),
-              );
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -137,6 +131,28 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          // --- Radius Slider ---
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              children: [
+                Text("Search Radius: ${_searchRadiusKm.toStringAsFixed(0)} km"),
+                Slider(
+                  min: 1,
+                  max: 100,
+                  divisions: 99,
+                  value: _searchRadiusKm,
+                  label: "${_searchRadiusKm.toStringAsFixed(0)} km",
+                  onChanged: (val) {
+                    setState(() {
+                      _searchRadiusKm = val;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
           // --- Add Dog Form ---
           ExpansionTile(
             title: const Text("Add Dog"),
@@ -145,8 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TextField(controller: breedCtrl, decoration: const InputDecoration(labelText: 'Breed')),
               TextField(controller: ageCtrl, decoration: const InputDecoration(labelText: 'Age')),
               const SizedBox(height: 8),
-              if (_pickedImage != null)
-                Image.file(_pickedImage!, height: 100),
+              if (_pickedImage != null) Image.file(_pickedImage!, height: 100),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -169,65 +184,43 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const Divider(),
 
-          // --- Dog Profiles List ---
+          // --- Dogs Nearby ---
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('dogs')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
+            child: StreamBuilder<List<DocumentSnapshot>>(
+              stream: _geoQueryNearbyDogs(),
               builder: (ctx, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final dogs = snapshot.data!.docs;
+                final dogs = snapshot.data!;
+                if (dogs.isEmpty) {
+                  return const Center(child: Text("🐾 No dogs found nearby"));
+                }
 
                 return ListView.builder(
                   itemCount: dogs.length,
                   itemBuilder: (ctx, i) {
-                    final dog = dogs[i];
-                    final ownerId = dog['ownerId'];
+                    final data = dogs[i].data()! as Map<String, dynamic>;
+                    final ownerId = data['ownerId'];
+                    final dogPoint = (data['position']['geopoint'] as GeoPoint);
+                    final distanceKm = _calculateDistance(dogPoint);
+
                     return ListTile(
-                      leading: dog['photoUrl'] != null
-                          ? CircleAvatar(backgroundImage: NetworkImage(dog['photoUrl']))
+                      leading: data['photoUrl'] != null
+                          ? CircleAvatar(backgroundImage: NetworkImage(data['photoUrl']))
                           : const CircleAvatar(child: Icon(Icons.pets)),
-                      title: Text(dog['name']),
-                      subtitle: Text("${dog['breed']} (${dog['age']} yrs)"),
-
-                      // Buttons (Like + Chat if matched)
-                      trailing: FutureBuilder<QuerySnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('matches')
-                            .where('users', arrayContains: uid)
-                            .get(),
-                        builder: (ctx, snap) {
-                          if (!snap.hasData) return const SizedBox.shrink();
-                          final isMatched = snap.data!.docs.any((doc) {
-                            final users = List.from(doc['users']);
-                            return users.contains(ownerId);
-                          });
-
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.favorite_border),
-                                onPressed: () => _likeDog(dog.id, ownerId),
-                              ),
-                              if (isMatched)
-                                IconButton(
-                                  icon: const Icon(Icons.message),
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (ctx) => ChatScreen(ownerId),
-                                      ),
-                                    );
-                                  },
-                                ),
-                            ],
+                      title: Text(data['name']),
+                      subtitle: Text(
+                          "${data['breed']} (${data['age']} yrs) • ${distanceKm.toStringAsFixed(1)} km away"),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.message),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (ctx) => ChatScreen(ownerId),
+                            ),
                           );
                         },
                       ),

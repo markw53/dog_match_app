@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'home_screen.dart';
+import 'notification_service.dart';
 
 class AuthScreen extends StatelessWidget {
   const AuthScreen({super.key});
@@ -11,15 +13,12 @@ class AuthScreen extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (ctx, snapshot) {
-        // Check if logged in
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasData) {
-          // ✅ User logged in → go to HomeScreen
           return const HomeScreen();
         }
-        // ❌ Not logged in → show login/registration form
         return const AuthForm();
       },
     );
@@ -41,26 +40,50 @@ class _AuthFormState extends State<AuthForm> {
   Future<void> _submit() async {
     try {
       if (isLogin) {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        // --- Login ---
+        final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: emailCtrl.text.trim(),
           password: passCtrl.text.trim(),
         );
-      } else {
-        final newUser = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: emailCtrl.text.trim(),
-          password: passCtrl.text.trim(),
-        );
-        await FirebaseFirestore.instance.collection('users').doc(newUser.user!.uid).set({
-          'email': newUser.user!.email,
-          'displayName': newUser.user!.email!.split('@')[0], // default user name
-          'createdAt': FieldValue.serverTimestamp(),   
-    });
 
+        // ✅ Save FCM token after login
+        final token = await NotificationService.getToken();
+        if (token != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userCredential.user!.uid)
+              .update({'fcmToken': token});
+        }
+      } else {
+        // --- Register ---
+        final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: emailCtrl.text.trim(),
+          password: passCtrl.text.trim(),
+        );
+
+        // Save user profile in Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .set({
+          'email': userCredential.user!.email,
+          'displayName': userCredential.user!.email!.split('@')[0],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        // ✅ Save FCM token for push notifications
+        final token = await NotificationService.getToken();
+        if (token != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userCredential.user!.uid)
+              .update({'fcmToken': token});
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -78,8 +101,8 @@ class _AuthFormState extends State<AuthForm> {
             ),
             TextField(
               controller: passCtrl,
-              obscureText: true,
               decoration: const InputDecoration(labelText: 'Password'),
+              obscureText: true,
             ),
             const SizedBox(height: 20),
             ElevatedButton(

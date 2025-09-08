@@ -122,6 +122,15 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text("Nearby Dogs"),
         actions: [
           IconButton(
+            icon: const Icon(Icons.map),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (ctx) => const MapScreen()),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();

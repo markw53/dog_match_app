@@ -22,9 +22,9 @@ class _HomeScreenState extends State<HomeScreen> {
   File? _pickedImage;
 
   // --- Pick Image from Gallery ---
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
+    final picked = await picker.pickImage(source: source, imageQuality: 70);
 
     if (picked != null) {
       setState(() => _pickedImage = File(picked.path));
@@ -137,10 +137,21 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               if (_pickedImage != null)
                 Image.file(_pickedImage!, height: 100),
-              TextButton.icon(
-                onPressed: _pickImage,
-                icon: const Icon(Icons.image),
-                label: const Text("Pick Dog Photo"),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _pickImage(ImageSource.gallery),
+                    icon: const Icon(Icons.photo),
+                    label: const Text("Gallery"),
+                  ),
+                  const SizedBox(width: 16),
+                  TextButton.icon(
+                    onPressed: () => _pickImage(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text("Camera"),
+                  ),
+                ],
               ),
               ElevatedButton(onPressed: _addDog, child: const Text("Add Dog")),
             ],

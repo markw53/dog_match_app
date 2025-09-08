@@ -25,10 +25,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
@@ -78,6 +75,15 @@ class DefaultFirebaseOptions {
     authDomain: 'dog-match-app-fb26e.firebaseapp.com',
     storageBucket: 'dog-match-app-fb26e.firebasestorage.app',
     measurementId: 'G-LW5JNP3TFY',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyAWeu_bUK9J3qE4VlEz8_I1b8TZJay85Ko',
+    appId: '1:436329415809:ios:e1306803bbc701bc737980',
+    messagingSenderId: '436329415809',
+    projectId: 'dog-match-app-fb26e',
+    storageBucket: 'dog-match-app-fb26e.firebasestorage.app',
+    iosBundleId: 'com.example.dogMatchApp',
   );
 
 }

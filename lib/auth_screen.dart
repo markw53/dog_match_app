@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_screen.dart';
 
 class AuthScreen extends StatelessWidget {
@@ -45,10 +46,16 @@ class _AuthFormState extends State<AuthForm> {
           password: passCtrl.text.trim(),
         );
       } else {
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        final newUser = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: emailCtrl.text.trim(),
           password: passCtrl.text.trim(),
         );
+        await FirebaseFirestore.instance.collection('users').doc(newUser.user!.uid).set({
+          'email': newUser.user!.email,
+          'displayName': newUser.user!.email!.split('@')[0], // default user name
+          'createdAt': FieldValue.serverTimestamp(),   
+    });
+
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

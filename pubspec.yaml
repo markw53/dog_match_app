@@ -38,6 +38,7 @@ dependencies:
   firebase_messaging: ^16.0.1
   flutter_local_notifications: ^15.1.0+1
   google_maps_flutter: ^2.13.1
+  google_maps_cluster_manager: ^3.1.0
   geolocator: ^14.0.2
   geoflutterfire_plus: ^0.0.33
   intl: ^0.20.2

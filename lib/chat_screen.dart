@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // For formatting timestamps
+import 'package:intl/intl.dart';
 
 class ChatScreen extends StatefulWidget {
   final String otherUserId;
@@ -14,34 +14,38 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController msgCtrl = TextEditingController();
 
-  /// Helper to get consistent chatId
-  String getChatId(String uid1, String uid2) {
-    return uid1.hashCode <= uid2.hashCode ? "$uid1-$uid2" : "$uid2-$uid1";
+  @override
+  void dispose() {
+    msgCtrl.dispose();
+    super.dispose();
   }
 
-  /// Format timestamp nicely
-  String formatTime(Timestamp? ts) {
+  String getChatId(String uid1, String uid2) =>
+      uid1.hashCode <= uid2.hashCode ? "$uid1-$uid2" : "$uid2-$uid1";
+
+  String _formatTime(Timestamp? ts) {
     if (ts == null) return "";
     final date = ts.toDate();
-    return DateFormat.jm().format(date); // e.g. "8:45 PM"
+    return DateFormat.jm().format(date);
   }
 
   @override
   Widget build(BuildContext context) {
     final myId = FirebaseAuth.instance.currentUser!.uid;
     final chatId = getChatId(myId, widget.otherUserId);
-    final msgsQuery = FirebaseFirestore.instance
+
+    final messagesRef = FirebaseFirestore.instance
         .collection('chats/$chatId/messages')
         .orderBy('timestamp', descending: true);
 
-    // Mark any "sent" messages from other user as delivered (when I open chat)
+    // ✅ Mark "sent" → "delivered"
     FirebaseFirestore.instance
         .collection('chats/$chatId/messages')
         .where('senderId', isEqualTo: widget.otherUserId)
         .where('status', isEqualTo: 'sent')
         .get()
-        .then((snapshot) {
-      for (var doc in snapshot.docs) {
+        .then((snap) {
+      for (final doc in snap.docs) {
         doc.reference.update({'status': 'delivered'});
       }
     });
@@ -50,10 +54,9 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(title: const Text("Chat")),
       body: Column(
         children: [
-          // --- Messages List ---
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: msgsQuery.snapshots(),
+              stream: messagesRef.snapshots(),
               builder: (ctx, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -66,12 +69,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (ctx, i) {
                     final msg = msgs[i];
                     final isMe = msg['senderId'] == myId;
-                    final text = msg['text'] ?? '';
-                    final status = msg['status'] ?? 'sent';
-                    final timestamp = msg['timestamp'] as Timestamp?;
-                    final timeLabel = formatTime(timestamp);
+                    final String text = msg['text'] ?? '';
+                    final String status = msg['status'] ?? 'sent';
+                    final Timestamp? ts = msg['timestamp'] as Timestamp?;
+                    final timeLabel = _formatTime(ts);
 
-                    // If I saw their messages, mark as read
                     if (!isMe && status != 'read') {
                       msg.reference.update({'status': 'read'});
                     }
@@ -85,7 +87,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         padding: const EdgeInsets.all(10),
                         constraints: BoxConstraints(
                           maxWidth:
-                              MediaQuery.of(context).size.width * 0.7, // bubble width
+                              MediaQuery.of(context).size.width * 0.7,
                         ),
                         decoration: BoxDecoration(
                           color: isMe ? Colors.teal[200] : Colors.grey[300],
@@ -103,10 +105,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               ? CrossAxisAlignment.end
                               : CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              text,
-                              style: const TextStyle(fontSize: 16),
-                            ),
+                            Text(text,
+                                style: const TextStyle(fontSize: 16)),
                             const SizedBox(height: 4),
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -120,8 +120,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                   const SizedBox(width: 4),
                                   Icon(
                                     status == 'sent'
-                                        ? Icons.check // one tick
-                                        : Icons.done_all, // double tick
+                                        ? Icons.check
+                                        : Icons.done_all,
                                     size: 14,
                                     color: status == 'read'
                                         ? Colors.blue
@@ -129,7 +129,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ),
                                 ],
                               ],
-                            )
+                            ),
                           ],
                         ),
                       ),
@@ -140,10 +140,10 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
-          // --- Input ---
+          // Input
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.all(8),
               child: Row(
                 children: [
                   Expanded(
@@ -154,8 +154,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.all(Radius.circular(20)),
                         ),
-                        contentPadding: EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 15),
+                        contentPadding:
+                            EdgeInsets.symmetric(vertical: 10, horizontal: 15),
                       ),
                     ),
                   ),
@@ -172,16 +172,16 @@ class _ChatScreenState extends State<ChatScreen> {
                           'text': msgCtrl.text.trim(),
                           'senderId': myId,
                           'timestamp': FieldValue.serverTimestamp(),
-                          'status': 'sent', // initially sent
+                          'status': 'sent',
                         });
                         msgCtrl.clear();
                       },
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );

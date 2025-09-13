@@ -33,20 +33,25 @@ class AuthForm extends StatefulWidget {
 }
 
 class _AuthFormState extends State<AuthForm> {
-  final emailCtrl = TextEditingController();
-  final passCtrl = TextEditingController();
+  final TextEditingController emailCtrl = TextEditingController();
+  final TextEditingController passCtrl = TextEditingController();
   bool isLogin = true;
+
+  @override
+  void dispose() {
+    emailCtrl.dispose();
+    passCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
     try {
       if (isLogin) {
-        // --- Login ---
         final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: emailCtrl.text.trim(),
           password: passCtrl.text.trim(),
         );
 
-        // ✅ Save FCM token after login
         final token = await NotificationService.getToken();
         if (token != null) {
           await FirebaseFirestore.instance
@@ -55,23 +60,20 @@ class _AuthFormState extends State<AuthForm> {
               .update({'fcmToken': token});
         }
       } else {
-        // --- Register ---
         final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: emailCtrl.text.trim(),
           password: passCtrl.text.trim(),
         );
 
-        // Save user profile in Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userCredential.user!.uid)
             .set({
           'email': userCredential.user!.email,
-          'displayName': userCredential.user!.email!.split('@')[0],
+          'displayName': userCredential.user!.email?.split('@').first ?? "User",
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // ✅ Save FCM token for push notifications
         final token = await NotificationService.getToken();
         if (token != null) {
           await FirebaseFirestore.instance
@@ -82,8 +84,9 @@ class _AuthFormState extends State<AuthForm> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
     }
   }
 
@@ -114,7 +117,7 @@ class _AuthFormState extends State<AuthForm> {
               child: Text(isLogin
                   ? "Create account instead"
                   : "I already have an account"),
-            )
+            ),
           ],
         ),
       ),

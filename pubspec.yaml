@@ -43,5 +43,5 @@ flutter:
 
   uses-material-design: true
 
-  assets:
-    - assets/ # if you plan to add custom icons, images
+
+

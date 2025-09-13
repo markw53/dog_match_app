@@ -1,16 +1,15 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_maps_cluster_manager/google_maps_cluster_manager.dart'
-    as gmc; // ✅ alias to avoid conflict
+    as gmc;
 
 import 'chat_screen.dart';
+import 'location_service.dart';
 
 /// ClusterItem representation for each dog
 class DogItem with gmc.ClusterItem {
@@ -48,15 +47,13 @@ class _NearbyScreenState extends State<NearbyScreen>
   double _searchRadiusKm = 20;
   Position? _currentPosition;
 
-  // ✅ Use final for lists that are initialized once and mutated later
   final List<DogItem> _dogs = [];
-  final List<String> _selectedBreeds = []; // filter breeds
+  final List<String> _selectedBreeds = [];
 
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
-  late final gmc.ClusterManager<DogItem> _clusterManager; // ✅ make final
+  late final gmc.ClusterManager<DogItem> _clusterManager;
 
-  // ✅ Mark const lists as final
   final List<String> _allBreeds = [
     "Labrador",
     "Golden Retriever",
@@ -65,6 +62,10 @@ class _NearbyScreenState extends State<NearbyScreen>
     "Bulldog",
     "Poodle",
   ];
+
+  late final TabController _tabController;
+
+  CameraPosition? _lastCameraPosition;
 
   @override
   void initState() {
@@ -75,44 +76,53 @@ class _NearbyScreenState extends State<NearbyScreen>
       markerBuilder: _markerBuilder,
       stopClusteringZoom: 17,
     );
+    _tabController = TabController(length: 2, vsync: this);
     _loadLocation();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadLocation() async {
-    final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
+    final pos = await LocationService.getCurrentPosition();
     setState(() => _currentPosition = pos);
     _loadDogs();
   }
 
   Future<void> _loadDogs() async {
     if (_currentPosition == null) return;
+
     final center = GeoFirePoint(
-        GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude));
+      GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+    );
     final colRef = FirebaseFirestore.instance.collection('dogs');
 
-    final stream = GeoCollectionReference(colRef).within(
+    final stream = GeoCollectionReference(colRef).subscribeWithin(
       center: center,
       radiusInKm: _searchRadiusKm,
       field: 'position',
+      geopointFrom: (doc) => (doc['position']['geopoint'] as GeoPoint),
     );
 
     stream.listen((docs) {
       final items = docs.map((d) {
-        final data = d.data()! as Map<String, dynamic>;
-        final gp = data['position']['geopoint'] as GeoPoint;
+        final data = d.data()!;
+        final gp = data['position']?['geopoint'] as GeoPoint?;
+        if (gp == null) return null; // skip bad docs
         return DogItem(
           id: d.id,
-          ownerId: data['ownerId'],
+          ownerId: data['ownerId'] ?? '',
           name: data['name'] ?? "Unknown",
           breed: data['breed'] ?? "Unknown",
           age: (data['age'] ?? 0) as int,
           photoUrl: data['photoUrl'],
           latLng: LatLng(gp.latitude, gp.longitude),
         );
-      }).toList();
+      }).whereType<DogItem>().toList();
 
-      // Apply breed filter (if any)
       final filtered = _selectedBreeds.isEmpty
           ? items
           : items.where((dog) => _selectedBreeds.contains(dog.breed)).toList();
@@ -128,20 +138,26 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   void _updateMarkers(Set<Marker> m) => setState(() => _markers = m);
 
-  Future<Marker> Function(gmc.Cluster<DogItem>) get _markerBuilder =>
-      (cluster) async {
-        if (cluster.isMultiple) {
-          return Marker(
-            markerId: MarkerId(cluster.getId()),
-            position: cluster.location,
-            icon: await _createClusterIcon(cluster.count),
-            onTap: () {
-              _mapController?.animateCamera(CameraUpdate.newLatLngZoom(
-                  cluster.location, _mapController!.cameraPosition.zoom + 2));
-            },
+  // ✅ FIX: markerBuilder narrowed to dynamic
+  Future<Marker> Function(dynamic) get _markerBuilder => (cluster) async {
+    final typedCluster = cluster as gmc.Cluster<DogItem>;
+    if (typedCluster.isMultiple) {
+      return Marker(
+        markerId: MarkerId(typedCluster.getId()),
+        position: typedCluster.location,
+        icon: await _createClusterIcon(typedCluster.count),
+        onTap: () {
+          final newZoom = (_lastCameraPosition?.zoom ?? 12) + 2;
+          _mapController?.animateCamera(
+            CameraUpdate.newLatLngZoom(
+              typedCluster.location,
+              newZoom,
+            ),
           );
-        } else {
-          final dog = cluster.items.first;
+        },
+      );
+    } else {
+          final dog = typedCluster.items.first;
           BitmapDescriptor icon = BitmapDescriptor.defaultMarker;
           if (dog.photoUrl != null) {
             icon = await _getImageMarker(dog.photoUrl!);
@@ -184,13 +200,19 @@ class _NearbyScreenState extends State<NearbyScreen>
         ..addOval(Rect.fromCircle(
             center: Offset(size / 2, size / 2), radius: size / 2));
       canvas.clipPath(clipPath);
-      canvas.drawImageRect(fi.image,
-          Rect.fromLTWH(0, 0, fi.image.width.toDouble(),
-              fi.image.height.toDouble()), rect, paint);
+      canvas.drawImageRect(
+        fi.image,
+        Rect.fromLTWH(0, 0, fi.image.width.toDouble(),
+            fi.image.height.toDouble()),
+        rect,
+        paint,
+      );
+
       final pic = recorder.endRecording();
       final img = await pic.toImage(size, size);
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-      return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+
+      return BitmapDescriptor.bytes(byteData!.buffer.asUint8List()); // ✅ fixed
     } catch (_) {
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
     }
@@ -211,130 +233,180 @@ class _NearbyScreenState extends State<NearbyScreen>
 
     canvas.drawCircle(const Offset(size / 2, size / 2), size / 2.0, paint);
     textPainter.layout();
-    textPainter.paint(canvas, Offset((size - textPainter.width) / 2,
-        (size - textPainter.height) / 2));
+    textPainter.paint(canvas,
+        Offset((size - textPainter.width) / 2, (size - textPainter.height) / 2));
+
     final img = await recorder.endRecording().toImage(size, size);
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+
+    return BitmapDescriptor.bytes(byteData!.buffer.asUint8List()); // ✅ fixed
+  }
+
+  Future<void> _recenter() async {
+    final pos = await LocationService.getCurrentPosition();
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(
+        LatLng(pos.latitude, pos.longitude),
+        14,
+      ),
+    );
+  }
+
+  Future<void> _fitToDogs() async {
+    if (_markers.isEmpty || _mapController == null) return;
+    final bounds = _boundsFromMarkers(_markers);
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+  }
+
+  LatLngBounds _boundsFromMarkers(Set<Marker> markers) {
+    final latitudes = markers.map((m) => m.position.latitude).toList();
+    final longitudes = markers.map((m) => m.position.longitude).toList();
+
+    final southwest = LatLng(
+      latitudes.reduce((a, b) => a < b ? a : b),
+      longitudes.reduce((a, b) => a < b ? a : b),
+    );
+    final northeast = LatLng(
+      latitudes.reduce((a, b) => a > b ? a : b),
+      longitudes.reduce((a, b) => a > b ? a : b),
+    );
+
+    return LatLngBounds(southwest: southwest, northeast: northeast);
   }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Discover Nearby Dogs"), // const fixes lint
-          bottom: const TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.list), text: "List"),
-              Tab(icon: Icon(Icons.map), text: "Map"),
-            ],
-          ),
-        ),
-        body: Column(
-          children: [
-            // ✅ Slider + Breed Filter chips
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                children: [
-                  Text("Search Radius: ${_searchRadiusKm.toStringAsFixed(0)} km"),
-                  Slider(
-                    min: 1,
-                    max: 100,
-                    divisions: 99,
-                    value: _searchRadiusKm,
-                    label: "${_searchRadiusKm.toStringAsFixed(0)} km",
-                    onChanged: (val) {
-                      setState(() => _searchRadiusKm = val);
-                      _loadDogs();
-                    },
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    children: _allBreeds.map((breed) {
-                      final isSelected = _selectedBreeds.contains(breed);
-                      return FilterChip(
-                        label: Text(breed),
-                        selected: isSelected,
-                        onSelected: (sel) {
-                          setState(() {
-                            if (sel) {
-                              _selectedBreeds.add(breed);
-                            } else {
-                              _selectedBreeds.remove(breed);
-                            }
-                          });
-                          _loadDogs();
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: TabBarView(
-                children: [
-                  // --- LIST TAB ---
-                  _currentPosition == null
-                      ? const Center(child: CircularProgressIndicator())
-                      : ListView.builder(
-                          itemCount: _dogs.length,
-                          itemBuilder: (ctx, i) {
-                            final dog = _dogs[i];
-                            final distance = Geolocator.distanceBetween(
-                                    _currentPosition!.latitude,
-                                    _currentPosition!.longitude,
-                                    dog.latLng.latitude,
-                                    dog.latLng.longitude) /
-                                1000.0;
-                            return ListTile(
-                              leading: dog.photoUrl != null
-                                  ? CircleAvatar(
-                                      backgroundImage:
-                                          NetworkImage(dog.photoUrl!))
-                                  : const CircleAvatar(child: Icon(Icons.pets)),
-                              title: Text(dog.name),
-                              subtitle: Text(
-                                  "${dog.breed} (${dog.age} yrs) • ${distance.toStringAsFixed(1)} km away"),
-                              trailing: const Icon(Icons.message),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => ChatScreen(dog.ownerId)),
-                                );
-                              },
-                            );
-                          },
-                        ),
-
-                  // --- MAP TAB ---
-                  _currentPosition == null
-                      ? const Center(child: CircularProgressIndicator())
-                      : GoogleMap(
-                          initialCameraPosition: CameraPosition(
-                            target: LatLng(_currentPosition!.latitude,
-                                _currentPosition!.longitude),
-                            zoom: 12,
-                          ),
-                          onMapCreated: (controller) {
-                            _mapController = controller;
-                            _clusterManager.setMapId(controller.mapId);
-                          },
-                          markers: _markers,
-                          myLocationEnabled: true,
-                          onCameraMove: _clusterManager.onCameraMove,
-                          onCameraIdle: _clusterManager.updateMap,
-                        ),
-                ],
-              ),
-            ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Discover Nearby Dogs"),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.list), text: "List"),
+            Tab(icon: Icon(Icons.map), text: "Map"),
           ],
         ),
+      ),
+      body: Column(
+        children: [
+          // slider + chips
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              children: [
+                Text("Search Radius: ${_searchRadiusKm.toStringAsFixed(0)} km"),
+                Slider(
+                  min: 1,
+                  max: 100,
+                  divisions: 99,
+                  value: _searchRadiusKm,
+                  label: "${_searchRadiusKm.toStringAsFixed(0)} km",
+                  onChanged: (val) {
+                    setState(() => _searchRadiusKm = val);
+                    _loadDogs();
+                  },
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: _allBreeds.map((breed) {
+                    final isSelected = _selectedBreeds.contains(breed);
+                    return FilterChip(
+                      label: Text(breed),
+                      selected: isSelected,
+                      onSelected: (sel) {
+                        setState(() {
+                          if (sel) {
+                            _selectedBreeds.add(breed);
+                          } else {
+                            _selectedBreeds.remove(breed);
+                          }
+                        });
+                        _loadDogs();
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // LIST
+                _currentPosition == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                        itemCount: _dogs.length,
+                        itemBuilder: (ctx, i) {
+                          final dog = _dogs[i];
+                          final distance = LocationService.distanceBetween(
+                            GeoPoint(_currentPosition!.latitude,
+                                _currentPosition!.longitude),
+                            GeoPoint(dog.latLng.latitude, dog.latLng.longitude),
+                          );
+                          return ListTile(
+                            leading: dog.photoUrl != null
+                                ? CircleAvatar(
+                                    backgroundImage:
+                                        NetworkImage(dog.photoUrl!))
+                                : const CircleAvatar(child: Icon(Icons.pets)),
+                            title: Text(dog.name),
+                            subtitle: Text(
+                                "${dog.breed} (${dog.age} yrs) • ${distance.toStringAsFixed(1)} km away"),
+                            trailing: const Icon(Icons.message),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => ChatScreen(dog.ownerId)),
+                              );
+                            },
+                          );
+                        },
+                      ),
+
+                // MAP
+                _currentPosition == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: LatLng(_currentPosition!.latitude,
+                              _currentPosition!.longitude),
+                          zoom: 12,
+                        ),
+                        onMapCreated: (controller) {
+                          _mapController = controller;
+                          _clusterManager.setMapId(controller.mapId);
+                        },
+                        markers: _markers,
+                        myLocationEnabled: true,
+                        onCameraMove: _clusterManager.onCameraMove,
+                        onCameraIdle: _clusterManager.updateMap,
+                      ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton(
+            heroTag: "recenterBtn",
+            onPressed: _recenter,
+            backgroundColor: Colors.teal,
+            child: const Icon(Icons.my_location, color: Colors.white),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: "fitDogsBtn",
+            onPressed: _fitToDogs,
+            backgroundColor: Colors.deepOrange,
+            child: const Icon(Icons.fullscreen, color: Colors.white),
+          ),
+        ],
       ),
     );
   }

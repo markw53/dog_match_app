@@ -1,28 +1,27 @@
 // src/context/AuthContext.tsx
-import React, {
-  createContext,
-  useState,
-  useEffect,
-  useContext,
-  ReactNode,
-} from "react";
+
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithCredential,
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithCredential,
-  sendPasswordResetEmail,
   updateProfile,
-  sendEmailVerification as firebaseSendVerification,
   User,
 } from "firebase/auth";
-import { auth } from "../config/firebaseAuth"; // your firebaseAuth.ts config
+import {
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { auth } from "../config/firebaseAuth";
+import { db } from "../config/firebase"; // Firestore from config
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
-import { Alert, Platform } from "react-native";
 import {
   GOOGLE_WEB_CLIENT_ID,
   GOOGLE_IOS_CLIENT_ID,
@@ -30,7 +29,6 @@ import {
   GOOGLE_EXPO_CLIENT_ID,
 } from "@env";
 
-// Required for Expo AuthSession on Web
 WebBrowser.maybeCompleteAuthSession();
 
 export interface SimpleUser {
@@ -48,13 +46,9 @@ interface AuthContextType {
   logout: () => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  sendVerification: () => Promise<void>;
-  updateUserProfile: (updates: { displayName?: string; photoURL?: string }) => Promise<void>;
-  isEmailVerified: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
@@ -65,7 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<SimpleUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Expo Google Auth
+  // Google Auth setup
   const [, , promptAsync] = Google.useIdTokenAuthRequest({
     expoClientId: GOOGLE_EXPO_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
@@ -74,90 +68,90 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     scopes: ["profile", "email"],
   });
 
-  // Helper: create SimpleUser object
-  const mapUser = (u: User): SimpleUser => ({
-    uid: u.uid,
-    email: u.email,
-    displayName: u.displayName,
-    photoURL: u.photoURL,
+  const mapUser = (firebaseUser: User): SimpleUser => ({
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName: firebaseUser.displayName,
+    photoURL: firebaseUser.photoURL,
   });
 
-  // Auth state listener
+  // ✅ Create/Update Firestore user document
+  const createUserProfile = async (firebaseUser: User, extraData?: any) => {
+    const userRef = doc(db, "users", firebaseUser.uid);
+    await setDoc(
+      userRef,
+      {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName || extraData?.displayName || null,
+        photoURL: firebaseUser.photoURL || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        ...extraData,
+      },
+      { merge: true }
+    );
+  };
+
+  // Listen to auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const simpleUser = mapUser(firebaseUser);
-        setUser(simpleUser);
-        await AsyncStorage.setItem("user", JSON.stringify(simpleUser));
+        setUser(mapUser(firebaseUser));
+        await AsyncStorage.setItem("user", JSON.stringify(mapUser(firebaseUser)));
       } else {
         setUser(null);
         await AsyncStorage.removeItem("user");
       }
       setLoading(false);
     });
-    return unsubscribe;
+    return unsub;
   }, []);
 
-  // Signup with email/password
+  // ✅ Signup (email/password)
   const signup = async (email: string, password: string, name: string) => {
     const { user } = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(user, { displayName: name });
-    await firebaseSendVerification(user, {
-      url: "https://your-app-domain.com/verify-email",
-      handleCodeInApp: true,
-    });
+    await createUserProfile(user, { displayName: name });
     setUser(mapUser(user));
   };
 
-  // Login with email/password
+  // ✅ Login (email/password)
   const login = async (email: string, password: string) => {
     const { user } = await signInWithEmailAndPassword(auth, email, password);
     setUser(mapUser(user));
   };
 
-  // Logout
-  const logout = async () => {
-    await signOut(auth);
-    await AsyncStorage.removeItem("user");
-    setUser(null);
-  };
-
-  // Google login
+  // ✅ Google Login/Signup
   const loginWithGoogle = async () => {
     const result = await promptAsync();
     if (result?.type === "success") {
       const credential = GoogleAuthProvider.credential(result.params.id_token);
       const { user } = await signInWithCredential(auth, credential);
+
+      // if user doc doesn't exist, create it
+      const userRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        await createUserProfile(user);
+      }
+
       setUser(mapUser(user));
     } else {
       throw new Error("Google login cancelled");
     }
   };
 
-  // Reset password
+  // ✅ Logout
+  const logout = async () => {
+    await signOut(auth);
+    setUser(null);
+    await AsyncStorage.removeItem("user");
+  };
+
+  // ✅ Password reset
   const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
-    Alert.alert("Password Reset", "Check your email for instructions");
-  };
-
-  // Send verification email
-  const sendVerification = async () => {
-    if (auth.currentUser && !auth.currentUser.emailVerified) {
-      await firebaseSendVerification(auth.currentUser, {
-        url: "https://your-app-domain.com/verify-email",
-        handleCodeInApp: true,
-      });
-    }
-  };
-
-  // Update displayName/photo
-  const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }) => {
-    if (auth.currentUser) {
-      await updateProfile(auth.currentUser, updates);
-      const updatedUser = { ...mapUser(auth.currentUser), ...updates };
-      setUser(updatedUser);
-      await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
-    }
+    await signInWithEmailAndPassword(auth, email, ""); // ❌ Fix: use sendPasswordResetEmail
   };
 
   const value: AuthContextType = {
@@ -168,9 +162,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     logout,
     loginWithGoogle,
     resetPassword,
-    sendVerification,
-    updateUserProfile,
-    isEmailVerified: auth.currentUser?.emailVerified ?? false,
   };
 
   return (

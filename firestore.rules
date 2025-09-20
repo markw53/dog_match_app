@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ✅ 1. User Profiles
+    match /users/{userId} {
+      allow read: if request.auth != null; // anybody logged in can read any profile
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ✅ 2. Dogs (only owner can manage)
+    match /users/{userId}/dogs/{dogId} {
+      allow read: if request.auth != null; // any logged in user can view
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ✅ 3. Dog Swipes (only that dog's owner can manage)
+    match /dogSwipes/{dogId} {
+      allow read: if request.auth != null; // can read to load feed
+      allow create: if isDogOwner(dogId);
+      allow update: if isDogOwner(dogId);  // Only owner can add likes/passes
+      allow delete: if isDogOwner(dogId);
+    }
+
+    // ✅ 4. Matches (read/write only for involved users)
+    match /matches/{matchId} {
+      allow read: if isMatchParticipant(matchId);
+      allow create: if request.auth != null; // created by cloud function or client after checking swipes
+      allow update, delete: if isMatchParticipant(matchId);
+
+      // ✅ 5. Match Messages
+      match /messages/{messageId} {
+        allow read, create: if isMatchParticipant(matchId);
+        allow update, delete: if request.auth != null
+                              && resource.data.senderId == request.auth.uid;
+      }
+    }
+
+    // 🔧 Utility Functions
+    function isDogOwner(dogId) {
+      // Fetch the dog's ownerId field and check
+      return request.auth != null &&
+        get(/databases/$(database)/documents/dogSwipes/$(dogId)).data.ownerId == request.auth.uid;
+    }
+
+    function isMatchParticipant(matchId) {
+      return request.auth != null &&
+        (request.auth.uid == get(/databases/$(database)/documents/matches/$(matchId)).data.dog1Owner
+        || request.auth.uid == get(/databases/$(database)/documents/matches/$(matchId)).data.dog2Owner);
+    }
+  }
+}

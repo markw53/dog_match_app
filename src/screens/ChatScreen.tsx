@@ -9,9 +9,9 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "../config/firebase";
-import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
+import { db } from "@/config/firebase";
+import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 
 interface ChatScreenProps {
   route: { params: { matchId: string } };
@@ -76,7 +76,7 @@ export default function ChatScreen({ route }: ChatScreenProps) {
         avatar: user?.photoURL || undefined,
       }}
       placeholder="Type a message..."
-      textInputStyle={{ color: colors.text.primary }}
+      textInputProps={{ style: { color: colors.text.primary } }}
       renderUsernameOnMessage
       renderAvatarOnTop
     />

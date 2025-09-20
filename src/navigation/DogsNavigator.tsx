@@ -1,8 +1,8 @@
 // src/navigation/DogsNavigator.tsx
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import DogListScreen from "../screens/DogListScreen";
-import DogProfileScreen from "../screens/DogProfileScreen";
+import DogListScreen from "@/screens/DogListScreen";
+import DogProfileScreen from "@/screens/DogProfileScreen";
 
 export type DogsStackParamList = {
   DogList: undefined;

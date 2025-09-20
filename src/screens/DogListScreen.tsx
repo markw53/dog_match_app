@@ -11,7 +11,7 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   collection,
   getDocs,
@@ -20,9 +20,9 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
-import { db } from "../config/firebase";
-import { useTheme } from "../context/ThemeContext";
-import Card from "../components/common/Card";
+import { db } from "@/config/firebase";
+import { useTheme } from "@/context/ThemeContext";
+import Card from "@/components/common/Card";
 
 interface Dog {
   id: string;
@@ -34,7 +34,7 @@ interface Dog {
 
 export default function DogListScreen({ navigation }: any) {
   const { user } = useAuth();
-  const { colors, spacing, radius, fontSize } = useTheme();
+  const { colors, spacing, radius, fontSize, shadows } = useTheme();
 
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,13 +162,13 @@ export default function DogListScreen({ navigation }: any) {
           paddingBottom: spacing.xxl,
         }}
         ListEmptyComponent={
-          !loading && (
+          !loading ? (
             <View style={{ alignItems: "center", marginTop: spacing.xxl }}>
               <Text style={{ fontSize: fontSize.md, color: colors.text.secondary }}>
                 No dogs yet. Add one!
               </Text>
             </View>
-          )
+          ) : null
         }
       />
 

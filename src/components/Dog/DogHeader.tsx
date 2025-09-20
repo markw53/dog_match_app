@@ -14,7 +14,7 @@ interface DogHeaderProps {
   onDelete?: () => void;
 }
 
-export function DogHeader({ dog, isOwner, onBack, onEdit, onDelete }: DogHeaderProps) {
+export function Header({ dog, isOwner, onBack, onEdit, onDelete }: DogHeaderProps) {
   const { colors, spacing, radius, shadows } = useTheme();
 
   return (

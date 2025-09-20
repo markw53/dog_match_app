@@ -3,14 +3,14 @@ import React, { useState, useEffect } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { RouteProp } from "@react-navigation/native";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "../config/firebase";
+import { db } from "@/config/firebase";
 
-import ScreenWrapper from "../components/layout/ScreenWrapper";
-import { DogHeader } from "../components/Dog/DogHeader";
-import Card from "../components/common/Card";
-import Button from "../components/common/Button";
-import { useTheme } from "../context/ThemeContext";
-import { useAuth } from "../context/AuthContext";
+import ScreenWrapper from "@/components/layout/ScreenWrapper";
+import { Header } from "@/components/Dog/DogHeader";
+import Card from "@/components/common/Card";
+import Button from "@/components/common/Button";
+import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 
 type DogDetailsScreenProps = {
   route: RouteProp<{ params: { dogId: string; ownerId: string } }, "params">;

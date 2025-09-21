@@ -16,7 +16,7 @@ import { useTheme } from "../context/ThemeContext";
 import ScreenWrapper from "../components/layout/ScreenWrapper";
 import Card from "../components/common/Card";
 import Button from "../components/common/Button";
-import { Header } from "../components/DogProfile"; // ✅ Reuse your custom header
+import { Header } from "@/components/Dog/DogHeader"; // ✅ Reuse your custom header
 import ImageUploader from "../components/DogProfile/ImageUploader";
 import FormSection from "../components/DogProfile/FormSection";
 

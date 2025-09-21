@@ -69,7 +69,7 @@ export default function DogDetailsScreen({ route, navigation }: DogDetailsScreen
   return (
     <ScreenWrapper scrollable>
       {/* Header with image + edit/delete if owner */}
-      <DogHeader
+      <Header
         dog={dog}
         isOwner={isOwner}
         onBack={() => navigation.goBack()}

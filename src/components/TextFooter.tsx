@@ -1,7 +1,7 @@
 // src/components/TextFooter.tsx
 import React from "react";
 import { View, Text, Platform } from "react-native";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 const TextFooter = () => {
   const { colors, spacing, fontSize, fontWeight, shadows } = useTheme();

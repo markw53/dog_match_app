@@ -2,9 +2,9 @@
 import React from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext";
-import Card from "./common/Card";
-import Button from "./common/Button";
+import { useTheme } from "@/context/ThemeContext";
+import Card from "@/components/common/Card";
+import Button from "@/components/common/Button";
 
 interface Dog {
   id: string;

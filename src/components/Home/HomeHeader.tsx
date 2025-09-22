@@ -7,8 +7,8 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../context/ThemeContext";
-import SearchBar from "../common/SearchBar"; // assuming you have a custom themed SearchBar
+import { useTheme } from "@/context/ThemeContext";
+import SearchBar from "@/components/common/SearchBar"; // assuming you have a custom themed SearchBar
 
 interface HomeHeaderProps {
   searchQuery: string;

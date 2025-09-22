@@ -1,8 +1,8 @@
 // src/components/DogProfile/FormSection.tsx
 import React from "react";
 import { View } from "react-native";
-import FormField from "../FormField";
-import { useTheme } from "../../context/ThemeContext";
+import FormField from "@/components/FormField";
+import { useTheme } from "@/context/ThemeContext";
 
 interface FormSectionProps {
   values: any;

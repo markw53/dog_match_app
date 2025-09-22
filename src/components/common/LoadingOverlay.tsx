@@ -2,7 +2,7 @@
 import React from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { BlurView } from "expo-blur";
-import { useTheme } from "../../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 const LoadingOverlay: React.FC = () => {
   const { colors, isDark } = useTheme();

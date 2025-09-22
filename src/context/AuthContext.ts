@@ -17,8 +17,8 @@ import {
   getDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { auth } from "../config/firebaseAuth";
-import { db } from "../config/firebase"; // Firestore from config
+import { auth } from "@/config/firebaseAuth";
+import { db } from "@/config/firebase"; // Firestore from config
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Google Auth setup
   const [, , promptAsync] = Google.useIdTokenAuthRequest({
-    expoClientId: GOOGLE_EXPO_CLIENT_ID,
+    clientId: GOOGLE_EXPO_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     webClientId: GOOGLE_WEB_CLIENT_ID,

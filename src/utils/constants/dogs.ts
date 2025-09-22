@@ -1,0 +1,103 @@
+export const DOG_BREEDS = [
+    'Affenpinscher',
+    'Afghan Hound',
+    'Airedale Terrier',
+    'Akita',
+    'Alaskan Malamute',
+    'American Bulldog',
+    'American Pit Bull Terrier',
+    'Australian Cattle Dog',
+    'Australian Shepherd',
+    'Basenji',
+    'Basset Hound',
+    'Beagle',
+    'Belgian Malinois',
+    'Bernese Mountain Dog',
+    'Bichon Frise',
+    'Border Collie',
+    'Boston Terrier',
+    'Boxer',
+    'Bulldog',
+    'Cavalier King Charles Spaniel',
+    'Chihuahua',
+    'Chow Chow',
+    'Cocker Spaniel',
+    'Collie',
+    'Dachshund',
+    'Dalmatian',
+    'Doberman Pinscher',
+    'English Bulldog',
+    'French Bulldog',
+    'German Shepherd',
+    'Golden Retriever',
+    'Great Dane',
+    'Greyhound',
+    'Husky',
+    'Jack Russell Terrier',
+    'Labrador Retriever',
+    'Maltese',
+    'Miniature Pinscher',
+    'Newfoundland',
+    'Pekingese',
+    'Pomeranian',
+    'Poodle',
+    'Pug',
+    'Rottweiler',
+    'Saint Bernard',
+    'Samoyed',
+    'Schnauzer',
+    'Shetland Sheepdog',
+    'Shih Tzu',
+    'Siberian Husky',
+    'Welsh Corgi',
+    'Yorkshire Terrier'
+] as const;
+
+export const DOG_COLORS = [
+    'Black',
+    'White',
+    'Brown',
+    'Golden',
+    'Cream',
+    'Gray',
+    'Red',
+    'Blue',
+    'Fawn',
+    'Brindle',
+    'Spotted',
+    'Merle',
+    'Tricolor',
+    'Bicolor'
+] as const;
+
+export const TEMPERAMENTS = [
+    'Friendly',
+    'Aggressive',
+    'Calm',
+    'Energetic',
+    'Shy',
+    'Confident',
+    'Independent',
+    'Loyal',
+    'Playful',
+    'Protective',
+    'Social',
+    'Stubborn',
+    'Intelligent',
+    'Gentle'
+] as const;
+
+export const AGE_RANGES = [
+    { label: 'Puppy (0-1 year)', min: 0, max: 1 },
+    { label: 'Young (1-3 years)', min: 1, max: 3 },
+    { label: 'Adult (3-7 years)', min: 3, max: 7 },
+    { label: 'Senior (7+ years)', min: 7, max: 30 }
+] as const;
+
+export const WEIGHT_CATEGORIES = [
+    { label: 'Toy (< 5kg)', max: 5 },
+    { label: 'Small (5-10kg)', min: 5, max: 10 },
+    { label: 'Medium (10-25kg)', min: 10, max: 25 },
+    { label: 'Large (25-45kg)', min: 25, max: 45 },
+    { label: 'Giant (> 45kg)', min: 45 }
+] as const;

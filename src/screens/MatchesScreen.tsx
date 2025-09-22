@@ -33,6 +33,11 @@ export default function MatchesScreen({ navigation }: any) {
     try {
       setLoading(true);
       const matchesRef = collection(db, "matches");
+      if (!user) {
+        setMatches([]);
+        setLoading(false);
+        return;
+      }
       const q = query(matchesRef, where("dog1Owner", "==", user.uid));
       const q2 = query(matchesRef, where("dog2Owner", "==", user.uid));
 
@@ -41,8 +46,9 @@ export default function MatchesScreen({ navigation }: any) {
       const list: Match[] = [];
       snap.forEach((docSnap) => {
         const data = docSnap.data() as Match;
-        if (data.dog1Owner === user.uid || data.dog2Owner === user.uid) {
-          list.push({ id: docSnap.id, ...data });
+        if (user && (data.dog1Owner === user.uid || data.dog2Owner === user.uid)) {
+          const { id, ...rest } = data;
+          list.push({ id: docSnap.id, ...rest });
         }
       });
       setMatches(list);
@@ -54,7 +60,8 @@ export default function MatchesScreen({ navigation }: any) {
   };
 
   const renderMatch = ({ item }: { item: Match }) => {
-    const otherDogId = item.dog1Owner === user.uid ? item.dog2Id : item.dog1Id;
+    const otherDogId =
+      user && item.dog1Owner === user.uid ? item.dog2Id : item.dog1Id;
     return (
       <Card
         variant="outlined"
@@ -100,11 +107,11 @@ export default function MatchesScreen({ navigation }: any) {
         renderItem={renderMatch}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
-          !loading && (
+          !loading ? (
             <Text style={{ color: colors.text.secondary, textAlign: "center", marginTop: spacing.xl }}>
               No matches yet 🐾
             </Text>
-          )
+          ) : null
         }
       />
     </View>

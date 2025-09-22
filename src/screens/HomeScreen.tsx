@@ -11,16 +11,27 @@ import { useTheme } from "../context/ThemeContext";
 
 import ScreenWrapper from "../components/layout/ScreenWrapper";
 import { DogCard } from "../components/DogCard";
-import { HomeHeader } from "../components/Home/HomeHeader";
-import LoadingOverlay from "../components/common/LoadingOverlay";
-import EmptyState from "../components/common/EmptyState";
-import DogFilterModal from "../components/Home/DogFilterModal";
-import FAB from "../components/common/FAB"; // Assuming you have a reusable FAB
+import { HomeHeader } from "@/components/Home/HomeHeader";
+import LoadingOverlay from "@/components/common/LoadingOverlay";
+import EmptyState from "@/components/common/EmptyState";
+import DogFilterModal from "@/components/DogFilterModal";
+import FAB from "@/components/common/FAB"; // Assuming you have a reusable FAB
 
 import { matchService } from "../services/matchService";
 import { useAuth } from "../context/AuthContext";
 
-const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
+type Dog = {
+  id: string;
+  // Add other dog properties as needed
+};
+
+import type { FlatListProps } from "react-native";
+
+const ForwardedFlatList = React.forwardRef<FlatList<Dog>, FlatListProps<Dog>>(
+  (props, ref) => <FlatList<Dog> {...props} ref={ref} />
+);
+
+const AnimatedFlatList = Animated.createAnimatedComponent(ForwardedFlatList);
 
 export default function HomeScreen({ navigation }: any) {
   const {

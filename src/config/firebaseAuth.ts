@@ -1,6 +1,6 @@
 // src/config/firebaseAuth.ts
 import { Platform } from "react-native";
-import { app } from "./firebase"; // your firebase.ts config
+import { app } from "@/config/firebase"; // your firebase.ts config
 
 import {
   getAuth,
@@ -10,7 +10,7 @@ import {
   Auth,
 } from "firebase/auth";
 
-import { getReactNativePersistence } from "firebase/auth";
+import { getReactNativePersistence } from "firebase/auth/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 let auth: Auth;

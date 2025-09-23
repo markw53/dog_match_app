@@ -4,7 +4,7 @@ import { View, Text, Image, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import Card from "@/components/common/Card";
-import { useUserProfile } from "../../hooks"; // consume directly
+import { useUserProfile } from "@/hooks/useUserProfile"; // consume directly
 
 interface ProfileHeaderProps {
   onImagePress: () => void;

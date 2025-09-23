@@ -2,25 +2,21 @@
 import React from "react";
 import { View, Text, Image, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../context/ThemeContext";
-import Card from "../common/Card";
+import { useTheme } from "@/context/ThemeContext";
+import Card from "@/components/common/Card";
+import { useUserProfile } from "../../hooks"; // consume directly
 
 interface ProfileHeaderProps {
-  profile: {
-    displayName?: string;
-    email?: string;
-    photoURL?: string;
-  } | null;
   onImagePress: () => void;
   onEditPress: () => void;
 }
 
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
-  profile,
   onImagePress,
   onEditPress,
 }) => {
   const { colors, spacing, fontSize, fontWeight, radius } = useTheme();
+  const { profile } = useUserProfile(); // 👈 reactive subscription
 
   return (
     <Card variant="elevated" padding>

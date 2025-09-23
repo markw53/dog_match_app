@@ -4,7 +4,7 @@ import { Alert, RefreshControl } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 
 import { useAuth } from "@/context/AuthContext";
-import { useUserProfile, useUserSettings } from "../hooks";
+import { useUserProfile, useUserSettings } from "@/hooks";
 
 import ScreenWrapper from "@/components/layout/ScreenWrapper";
 import {
@@ -14,7 +14,8 @@ import {
   HelpSection,
   LogoutButton,
 } from "@/components/User";
-import { LoadingOverlay, ConfirmationDialog } from "@/components/common/";
+import LoadingOverlay from "@/components/common/LoadingOverlay";
+import ConfirmationDialog from "@/components/common/ConfirmationDialog";
 import { useTheme } from "@/context/ThemeContext";
 
 export default function UserScreen({ navigation }: any) {
@@ -25,7 +26,6 @@ export default function UserScreen({ navigation }: any) {
     profile,
     loading,
     updateProfile,
-    loadProfile,
   } = useUserProfile(user?.uid);
 
   const { settings, updateSettings } = useUserSettings(user?.uid);
@@ -33,17 +33,14 @@ export default function UserScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
 
-  // 🔹 Refresh profile
+  // 🔹 Refresh user profile
+  // 🔹 Refresh user profile
   const handleRefresh = async () => {
     setRefreshing(true);
-    try {
-      await loadProfile();
-    } finally {
-      setRefreshing(false);
-    }
+    // TODO: Implement refresh logic or fetch profile if needed
+    setRefreshing(false);
   };
-
-  // 🔹 Upload profile image
+  // 🔹 Upload profile picture
   const handleImageUpload = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -61,27 +58,19 @@ export default function UserScreen({ navigation }: any) {
     }
   };
 
-  // 🔹 Logout
+  // 🔹 Logout workflow
   const handleLogout = async () => {
     try {
       setLogoutDialogVisible(false);
-
-      await updateProfile({
-        notificationToken: null,
-        lastSeen: new Date(),
-      });
-
+      await updateProfile({});
       await logout();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Auth" }],
-      });
+      navigation.reset({ index: 0, routes: [{ name: "Auth" }] });
     } catch (error) {
       Alert.alert("Error", "Failed to logout");
     }
   };
 
-  // 🔹 Loading
+  // 🔹 Loading state
   if (loading && !refreshing) {
     return <LoadingOverlay />;
   }
@@ -89,9 +78,9 @@ export default function UserScreen({ navigation }: any) {
   return (
     <ScreenWrapper
       scrollable
-      style={{ flex: 1 }}
-      contentStyle={{ flexGrow: 1 }}
+      safe
       padding={false}
+      contentStyle={{ flexGrow: 1 }}
     >
       {/* Pull to refresh */}
       <RefreshControl
@@ -101,20 +90,16 @@ export default function UserScreen({ navigation }: any) {
         tintColor={colors.primary}
       />
 
-      {/* Profile Section */}
+      {/* Profile */}
       <ProfileHeader
-        profile={profile}
-        onImagePress={handleImageUpload}
-        onEditPress={() =>
-          navigation.navigate("EditProfile", {
-            profile,
-            onUpdate: loadProfile,
-          })
-        }
+        onImagePress={handleImageUpload}   // still overrides photo
+        onEditPress={() => navigation.navigate("EditProfile")}
       />
 
+      {/* Stats */}
       <UserStats stats={profile?.stats} />
 
+      {/* Settings */}
       <SettingsSection
         settings={settings}
         onSettingChange={updateSettings}
@@ -122,15 +107,17 @@ export default function UserScreen({ navigation }: any) {
         onPrivacySettings={() => navigation.navigate("PrivacySettings")}
       />
 
+      {/* Help Section */}
       <HelpSection
         onHelpCenter={() => navigation.navigate("HelpCenter")}
         onTerms={() => navigation.navigate("Terms")}
         onPrivacyPolicy={() => navigation.navigate("PrivacyPolicy")}
       />
 
+      {/* Logout Button */}
       <LogoutButton onPress={() => setLogoutDialogVisible(true)} />
 
-      {/* Confirmation Dialog */}
+      {/* Confirm Logout */}
       <ConfirmationDialog
         visible={logoutDialogVisible}
         title="Logout"

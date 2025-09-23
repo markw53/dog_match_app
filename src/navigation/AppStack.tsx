@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
 import HomeScreen from "@/screens/HomeScreen";
-import DogsNavigator from "./DogsNavigator"; // stack with DogList, DogDetails
+import DogsNavigator from "@/navigation/DogsNavigator"; // stack with DogList, DogDetails
 import UserScreen from "@/screens/UserScreen";
 
 export type AppStackParamList = {

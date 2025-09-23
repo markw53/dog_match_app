@@ -41,11 +41,18 @@ export interface SimpleUser {
 interface AuthContextType {
   user: SimpleUser | null;
   loading: boolean;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  signup: (email: string, password: string, displayname: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateUserProfile: (data: {
+    displayName?: string;
+    phoneNumber?: string;
+    bio?: string;
+    photoURL?: string;
+    email?: string;
+  }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

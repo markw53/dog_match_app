@@ -5,6 +5,7 @@ export const MATCH_STATUS = {
   COMPLETED: "completed",
   CANCELLED: "cancelled",
   EXPIRED: "expired",
+  DELETED: "deleted",
 } as const;
 
 export type MatchStatus = typeof MATCH_STATUS[keyof typeof MATCH_STATUS];

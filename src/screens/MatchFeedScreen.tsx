@@ -1,7 +1,7 @@
 // src/screens/MatchFeedScreen.tsx
 import React, { useEffect, useState } from "react";
 import { View, Text, Image, StyleSheet, ActivityIndicator, Dimensions } from "react-native";
-import Swiper from "react-native-deck-swiper";
+import Swiper from "react-native-deck-swiper";   // 👈 Updated import
 import { collectionGroup, getDocs } from "firebase/firestore";
 import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
@@ -36,14 +36,13 @@ export default function MatchFeedScreen() {
   const fetchAllDogs = async () => {
     try {
       setLoading(true);
-      // ✅ Fetch from ALL users' dogs using collectionGroup
+      // ✅ collectionGroup: fetch dogs across all users
       const snapshot = await getDocs(collectionGroup(db, "dogs"));
       const dogList: Dog[] = [];
       snapshot.forEach((docSnap) => {
-        const dogData = docSnap.data();
-        // Skip current user's dogs
-        if (dogData.ownerId !== user.uid) {
-          dogList.push({ id: docSnap.id, ...dogData } as Dog);
+        const data = docSnap.data() as Dog;
+        if (data.ownerId !== user?.uid) {
+          dogList.push({ id: docSnap.id, ...data });
         }
       });
       setDogs(dogList);
@@ -54,18 +53,20 @@ export default function MatchFeedScreen() {
     }
   };
 
+  // Swipe handlers
   const onSwipeRight = (cardIndex: number) => {
     const dog = dogs[cardIndex];
-    console.log("Liked ❤️: ", dog?.name);
-    // 👉 Save to Firestore: user.likes
+    console.log("❤️ Liked:", dog?.name);
+    // TODO: Firestore - add to likes
   };
 
   const onSwipeLeft = (cardIndex: number) => {
     const dog = dogs[cardIndex];
-    console.log("Passed ❌: ", dog?.name);
-    // 👉 Save to Firestore: user.passes
+    console.log("❌ Passed:", dog?.name);
+    // TODO: Firestore - add to passes
   };
 
+  // Card renderer
   const renderCard = (dog: Dog | null) => {
     if (!dog) return null;
     return (
@@ -76,15 +77,21 @@ export default function MatchFeedScreen() {
               ? { uri: dog.imageUrl }
               : require("../assets/default-dog.png")
           }
-          style={{ width: "100%", height: 280, borderRadius: 12 }}
+          style={{
+            width: "100%",
+            height: 280,
+            borderRadius: 12,
+            marginBottom: spacing.md,
+          }}
           resizeMode="cover"
         />
-        <View style={{ marginTop: spacing.md }}>
+        <View>
           <Text
             style={{
               fontSize: fontSize.xl,
               fontWeight: fontWeight.bold as any,
               color: colors.text.primary,
+              marginBottom: spacing.xs,
             }}
           >
             {dog.name}
@@ -93,22 +100,28 @@ export default function MatchFeedScreen() {
             style={{
               fontSize: fontSize.md,
               color: colors.text.secondary,
-              marginTop: spacing.xs,
+              marginBottom: spacing.sm,
             }}
           >
-            {dog.breed} • {dog.age ? `${dog.age} y/o` : ""}
+            {dog.breed} {dog.age ? `• ${dog.age} y/o` : ""}
           </Text>
           {dog.temperament && (
-            <Text style={{ color: colors.text.secondary, marginTop: spacing.xs }}>
+            <Text
+              style={{
+                fontSize: fontSize.sm,
+                color: colors.text.secondary,
+              }}
+            >
               Temperament: {dog.temperament}
             </Text>
           )}
           {dog.isAvailableForMating && (
             <Text
               style={{
+                fontSize: fontSize.sm,
+                fontWeight: fontWeight.medium as any,
                 color: colors.success,
                 marginTop: spacing.sm,
-                fontWeight: fontWeight.medium as any,
               }}
             >
               ✅ Available for Mating
@@ -148,8 +161,8 @@ export default function MatchFeedScreen() {
       <Swiper
         cards={dogs}
         renderCard={renderCard}
-        onSwipedRight={onSwipeRight}
         onSwipedLeft={onSwipeLeft}
+        onSwipedRight={onSwipeRight}
         stackSize={3}
         infinite
         backgroundColor="transparent"
@@ -161,9 +174,9 @@ export default function MatchFeedScreen() {
             title: "NOPE",
             style: {
               label: {
-                backgroundColor: "transparent",
                 color: colors.error,
                 fontSize: fontSize.xl,
+                fontWeight: fontWeight.bold as any,
               },
             },
           },
@@ -171,9 +184,9 @@ export default function MatchFeedScreen() {
             title: "LIKE",
             style: {
               label: {
-                backgroundColor: "transparent",
                 color: colors.success,
                 fontSize: fontSize.xl,
+                fontWeight: fontWeight.bold as any,
               },
             },
           },

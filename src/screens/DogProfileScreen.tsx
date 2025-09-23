@@ -7,18 +7,18 @@ import {
   ScrollView,
   View,
 } from "react-native";
-import { useForm, useImagePicker, useDogs } from "../hooks";
-import { useAuth } from "../context/AuthContext";
-import { dogValidationSchema } from "../utils/validationSchemas";
-import { useTheme } from "../context/ThemeContext";
+import { useForm, useImagePicker, useDogs } from "@/hooks";
+import { useAuth } from "@/context/AuthContext";
+import { dogValidationSchema } from "@/utils/validationSchemas";
+import { useTheme } from "@/context/ThemeContext";
 
 // 🔑 Reusable UI
-import ScreenWrapper from "../components/layout/ScreenWrapper";
-import Card from "../components/common/Card";
-import Button from "../components/common/Button";
+import ScreenWrapper from "@/components/layout/ScreenWrapper";
+import Card from "@/components/common/Card";
+import Button from "@/components/common/Button";
 import { Header } from "@/components/Dog/DogHeader"; // ✅ Reuse your custom header
-import ImageUploader from "../components/DogProfile/ImageUploader";
-import FormSection from "../components/DogProfile/FormSection";
+import ImageUploader from "@/components/DogProfile/ImageUploader";
+import FormSection from "@/components/DogProfile/FormSection";
 
 export default function DogProfileScreen({ navigation, route }: any) {
   const { user } = useAuth();

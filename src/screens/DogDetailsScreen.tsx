@@ -1,7 +1,7 @@
 // src/screens/DogDetailsScreen.tsx
 import React, { useState, useEffect } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
-import { RouteProp } from "@react-navigation/native";
+import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
+import { RouteProp, useNavigation } from "@react-navigation/native";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/config/firebase";
 
@@ -11,40 +11,78 @@ import Card from "@/components/common/Card";
 import Button from "@/components/common/Button";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
+import { matchService } from "@/services/matchService";
 
 type DogDetailsScreenProps = {
   route: RouteProp<{ params: { dogId: string; ownerId: string } }, "params">;
-  navigation: any;
 };
 
-export default function DogDetailsScreen({ route, navigation }: DogDetailsScreenProps) {
+interface Dog {
+  id?: string;
+  name: string;
+  breed: string;
+  gender?: "male" | "female";
+  weight?: number;
+  height?: number;
+  temperament?: string;
+  description?: string;
+  isAvailableForMating?: boolean;
+  healthCertificates?: {
+    vaccinations?: boolean;
+    healthCheck?: boolean;
+  };
+  photoURL?: string;
+}
+
+export default function DogDetailsScreen({ route }: DogDetailsScreenProps) {
   const { colors, spacing, fontSize, fontWeight } = useTheme();
   const { user } = useAuth();
+  const navigation = useNavigation<any>();
 
   const { dogId, ownerId } = route.params;
 
-  const [dog, setDog] = useState<any>(null);
+  const [dog, setDog] = useState<Dog | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // 🔥 Load dog document from owner subcollection: users/{ownerId}/dogs/{dogId}
   useEffect(() => {
     const fetchDog = async () => {
       try {
         setLoading(true);
+        setError(null);
+
         const docRef = doc(db, "users", ownerId, "dogs", dogId);
         const snap = await getDoc(docRef);
+
         if (snap.exists()) {
-          setDog(snap.data());
+          setDog({ id: snap.id, ...snap.data() } as Dog);
+        } else {
+          setDog(null);
+          setError("Dog not found.");
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("Error fetching dog:", e);
+        setError("Failed to load dog details.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchDog();
-  }, [dogId]);
+  }, [dogId, ownerId]);
+
+  const isOwner = user?.uid === ownerId;
+
+  const handleContactOwner = async () => {
+    try {
+      if (!user?.uid) return;
+      const matchId = await matchService.createMatch(user.uid, ownerId); // match owner & viewer
+      navigation.navigate("Chat", { matchId });
+    } catch (err) {
+      console.error("Error contacting owner:", err);
+    }
+  };
 
   if (loading) {
     return (
@@ -54,17 +92,17 @@ export default function DogDetailsScreen({ route, navigation }: DogDetailsScreen
     );
   }
 
-  if (!dog) {
+  if (error) {
     return (
       <ScreenWrapper>
-        <Text style={{ color: colors.error, fontSize: fontSize.md }}>
-          Dog not found.
+        <Text style={[styles.errorText, { color: colors.error, fontSize: fontSize.md }]}>
+          {error}
         </Text>
       </ScreenWrapper>
     );
   }
 
-  const isOwner = user?.uid === ownerId;
+  if (!dog) return null;
 
   return (
     <ScreenWrapper scrollable>
@@ -78,44 +116,35 @@ export default function DogDetailsScreen({ route, navigation }: DogDetailsScreen
             ? () => navigation.navigate("DogProfile", { dogId, isNewDog: false })
             : undefined
         }
-        onDelete={isOwner ? () => console.log("delete dog") : undefined}
+        onDelete={isOwner ? () => console.log("TODO: delete dog") : undefined}
       />
 
       {/* Dog Info Card */}
       <Card>
         <Text
-          style={{
-            fontSize: fontSize.xxl,
-            fontWeight: fontWeight.bold as any,
-            color: colors.text.primary,
-            marginBottom: spacing.sm,
-          }}
+          style={[
+            styles.dogName,
+            { fontSize: fontSize.xxl, fontWeight: fontWeight.bold as any, color: colors.text.primary },
+          ]}
         >
           {dog.name}
         </Text>
         <Text
-          style={{
-            fontSize: fontSize.md,
-            fontWeight: fontWeight.medium as any,
-            color: colors.text.secondary,
-            marginBottom: spacing.sm,
-          }}
+          style={[
+            styles.dogMeta,
+            { fontSize: fontSize.md, fontWeight: fontWeight.medium as any, color: colors.text.secondary },
+          ]}
         >
           {dog.breed} • {dog.gender?.toUpperCase()} • {dog.weight}kg
         </Text>
+
         {dog.temperament && (
-          <Text style={{ fontSize: fontSize.md, color: colors.text.secondary }}>
+          <Text style={[styles.dogText, { color: colors.text.secondary }]}>
             Temperament: {dog.temperament}
           </Text>
         )}
         {dog.description && (
-          <Text
-            style={{
-              marginTop: spacing.md,
-              fontSize: fontSize.md,
-              color: colors.text.primary,
-            }}
-          >
+          <Text style={[styles.dogText, { marginTop: spacing.md, color: colors.text.primary }]}>
             {dog.description}
           </Text>
         )}
@@ -123,55 +152,32 @@ export default function DogDetailsScreen({ route, navigation }: DogDetailsScreen
 
       {/* Availability + Health Info */}
       <Card>
-        {dog.isAvailableForMating ? (
-          <Text
-            style={{
-              fontSize: fontSize.md,
-              color: colors.success,
-              marginBottom: spacing.sm,
-            }}
-          >
-            ✅ Available for mating
-          </Text>
-        ) : (
-          <Text
-            style={{
-              fontSize: fontSize.md,
-              color: colors.warning,
-              marginBottom: spacing.sm,
-            }}
-          >
-            ❌ Not available for mating
-          </Text>
-        )}
-
         <Text
-          style={{
-            fontSize: fontSize.md,
-            color: colors.text.secondary,
-            marginBottom: spacing.sm,
-          }}
+          style={[
+            styles.statusText,
+            {
+              fontSize: fontSize.md,
+              color: dog.isAvailableForMating ? colors.success : colors.warning,
+            },
+          ]}
         >
-          Vaccinations:{" "}
-          {dog.healthCertificates?.vaccinations ? "✔️ Up-to-date" : "❌ Missing"}
+          {dog.isAvailableForMating ? "✅ Available for mating" : "❌ Not available for mating"}
         </Text>
-        <Text
-          style={{
-            fontSize: fontSize.md,
-            color: colors.text.secondary,
-          }}
-        >
-          Health Check:{" "}
-          {dog.healthCertificates?.healthCheck ? "✔️ Passed" : "❌ Pending"}
+
+        <Text style={[styles.healthText, { color: colors.text.secondary }]}>
+          Vaccinations: {dog.healthCertificates?.vaccinations ? "✔️ Up-to-date" : "❌ Missing"}
+        </Text>
+        <Text style={[styles.healthText, { color: colors.text.secondary }]}>
+          Health Check: {dog.healthCertificates?.healthCheck ? "✔️ Passed" : "❌ Pending"}
         </Text>
       </Card>
 
-      {/* Owner Actions */}
+      {/* Non-owner actions */}
       {!isOwner && (
         <Card>
           <Button
             title="Contact Owner"
-            onPress={() => console.log("contact owner")}
+            onPress={handleContactOwner}
             fullWidth
             variant="primary"
           />
@@ -187,3 +193,24 @@ export default function DogDetailsScreen({ route, navigation }: DogDetailsScreen
     </ScreenWrapper>
   );
 }
+
+const styles = StyleSheet.create({
+  errorText: {
+    textAlign: "center",
+  },
+  dogName: {
+    marginBottom: 8,
+  },
+  dogMeta: {
+    marginBottom: 8,
+  },
+  dogText: {
+    fontSize: 14,
+  },
+  statusText: {
+    marginBottom: 8,
+  },
+  healthText: {
+    marginBottom: 6,
+  },
+});

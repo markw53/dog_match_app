@@ -27,7 +27,7 @@ import {
   deleteObject,
 } from "firebase/storage";
 import { DOG_BREEDS } from "@/utils/constants";
-import { calculateDistance } from "@/services/locationService";
+import { calculateDistance } from "@/utils";
 
 export interface DogImage {
   url: string;

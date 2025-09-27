@@ -1,6 +1,12 @@
 // src/context/AuthContext.tsx
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -10,6 +16,7 @@ import {
   GoogleAuthProvider,
   updateProfile,
   User,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import {
   doc,
@@ -18,10 +25,12 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { auth } from "@/config/firebaseAuth";
-import { db } from "@/config/firebase"; // Firestore from config
+import { db } from "@/config/firebase"; 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
+import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import {
   GOOGLE_WEB_CLIENT_ID,
   GOOGLE_IOS_CLIENT_ID,
@@ -31,6 +40,7 @@ import {
 
 WebBrowser.maybeCompleteAuthSession();
 
+// 🔹 Context user type
 export interface SimpleUser {
   uid: string;
   email: string | null;
@@ -38,7 +48,8 @@ export interface SimpleUser {
   photoURL: string | null;
 }
 
-interface AuthContextType {
+// 🔹 Context value type (used for typing the context itself)
+export interface AuthContextType {
   user: SimpleUser | null;
   loading: boolean;
   signup: (email: string, password: string, displayname: string) => Promise<void>;
@@ -55,7 +66,10 @@ interface AuthContextType {
   }) => Promise<void>;
 }
 
+// ✅ FIX: Create context correctly using `AuthContextType`.
+// DO NOT write AuthContext.AuthContextType.
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
@@ -66,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<SimpleUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Google Auth setup
+  // Setup Google auth
   const [, , promptAsync] = Google.useIdTokenAuthRequest({
     clientId: GOOGLE_EXPO_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
@@ -82,7 +96,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     photoURL: firebaseUser.photoURL,
   });
 
-  // ✅ Create/Update Firestore user document
+  // 🔹 Save updated push token
+  const registerPushToken = async (firebaseUser: User) => {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== "granted") return;
+
+      const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
+      const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+
+      if (token) {
+        await setDoc(doc(db, "users", firebaseUser.uid), { pushToken: token }, { merge: true });
+      }
+    } catch (err) {
+      console.error("Error saving push token", err);
+    }
+  };
+
+  // 🔹 Create/Update user in Firestore
   const createUserProfile = async (firebaseUser: User, extraData?: any) => {
     const userRef = doc(db, "users", firebaseUser.uid);
     await setDoc(
@@ -98,14 +129,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       },
       { merge: true }
     );
+
+    await registerPushToken(firebaseUser);
   };
 
-  // Listen to auth state
+  // 🔹 Listen for auth changes
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(mapUser(firebaseUser));
         await AsyncStorage.setItem("user", JSON.stringify(mapUser(firebaseUser)));
+        await registerPushToken(firebaseUser);
       } else {
         setUser(null);
         await AsyncStorage.removeItem("user");
@@ -115,7 +149,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return unsub;
   }, []);
 
-  // ✅ Signup (email/password)
+  // 🔹 Auth helpers
   const signup = async (email: string, password: string, name: string) => {
     const { user } = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(user, { displayName: name });
@@ -123,24 +157,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(mapUser(user));
   };
 
-  // ✅ Login (email/password)
   const login = async (email: string, password: string) => {
     const { user } = await signInWithEmailAndPassword(auth, email, password);
     setUser(mapUser(user));
+    await registerPushToken(user);
   };
 
-  // ✅ Google Login/Signup
   const loginWithGoogle = async () => {
     const result = await promptAsync();
     if (result?.type === "success") {
       const credential = GoogleAuthProvider.credential(result.params.id_token);
       const { user } = await signInWithCredential(auth, credential);
 
-      // if user doc doesn't exist, create it
       const userRef = doc(db, "users", user.uid);
       const snap = await getDoc(userRef);
       if (!snap.exists()) {
         await createUserProfile(user);
+      } else {
+        await registerPushToken(user);
       }
 
       setUser(mapUser(user));
@@ -149,16 +183,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // ✅ Logout
   const logout = async () => {
     await signOut(auth);
     setUser(null);
     await AsyncStorage.removeItem("user");
   };
 
-  // ✅ Password reset
   const resetPassword = async (email: string) => {
-    await signInWithEmailAndPassword(auth, email, ""); // ❌ Fix: use sendPasswordResetEmail
+    await sendPasswordResetEmail(auth, email);
+  };
+
+  const updateUserProfile = async (data: {
+    displayName?: string;
+    phoneNumber?: string;
+    bio?: string;
+    photoURL?: string;
+    email?: string;
+  }) => {
+    if (user?.uid) {
+      await setDoc(doc(db, "users", user.uid), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+      setUser({ ...user, ...data });
+    }
   };
 
   const value: AuthContextType = {
@@ -169,6 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     logout,
     loginWithGoogle,
     resetPassword,
+    updateUserProfile,
   };
 
   return (

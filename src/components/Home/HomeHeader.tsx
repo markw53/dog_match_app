@@ -1,14 +1,9 @@
 // src/components/Home/HomeHeader.tsx
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
+import { View, TextInput, TouchableOpacity, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { useTheme } from "@/context/ThemeContext";
-import SearchBar from "@/components/common/SearchBar"; // assuming you have a custom themed SearchBar
 
 interface HomeHeaderProps {
   searchQuery: string;
@@ -17,64 +12,61 @@ interface HomeHeaderProps {
   dogsCount: number;
 }
 
-export const HomeHeader: React.FC<HomeHeaderProps> = ({
+export const HomeHeader = ({
   searchQuery,
   onSearch,
   onFilterPress,
   dogsCount,
-}) => {
-  const { colors, spacing, fontSize, fontWeight, radius } = useTheme();
+}: HomeHeaderProps) => {
+  const theme = useTheme();
+  const styles = useThemedStyles((t) => ({
+    container: {
+      padding: t.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: t.colors.surface,
+      backgroundColor: t.colors.background,
+    },
+    searchRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.colors.surface,
+      borderRadius: t.radius.md,
+      paddingHorizontal: t.spacing.sm,
+      marginBottom: t.spacing.sm,
+    },
+    searchInput: {
+      flex: 1,
+      ...t.typography.body1,
+      color: t.colors.text.primary,
+      paddingVertical: t.spacing.sm,
+      marginLeft: t.spacing.sm,
+    },
+    filterButton: {
+      marginLeft: t.spacing.sm,
+      padding: t.spacing.sm,
+    },
+    dogsCount: {
+      ...t.typography.body2,
+      color: t.colors.text.secondary,
+    },
+  }));
 
   return (
-    <View
-      style={{
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-      }}
-    >
-      {/* 🔍 Search + Filter Row */}
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <View style={{ flex: 1 }}>
-          <SearchBar
-            value={searchQuery}
-            onChangeText={onSearch}
-            placeholder="Search dogs..."
-          />
-        </View>
-        <TouchableOpacity
-          onPress={onFilterPress}
-          style={{
-            marginLeft: spacing.sm,
-            padding: spacing.sm,
-            borderRadius: radius.sm,
-            backgroundColor: colors.primary + "15",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Ionicons name="filter" size={22} color={colors.primary} />
+    <View style={styles.container}>
+      <View style={styles.searchRow}>
+        <Ionicons name="search-outline" size={20} color={theme.colors.text.secondary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search dogs..."
+          placeholderTextColor={theme.colors.text.disabled}
+          value={searchQuery}
+          onChangeText={onSearch}
+        />
+        <TouchableOpacity style={styles.filterButton} onPress={onFilterPress}>
+          <Ionicons name="filter-outline" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
-
-      {/* 📊 Stats Row */}
-      <View
-        style={{
-          marginTop: spacing.sm,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: fontSize.sm,
-            fontWeight: fontWeight.medium as any,
-            color: colors.text.secondary,
-          }}
-        >
-          {dogsCount} dogs available
-        </Text>
-      </View>
+      <Text style={styles.dogsCount}>{dogsCount} dogs found</Text>
     </View>
   );
 };

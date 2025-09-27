@@ -10,11 +10,10 @@ import {
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
-import { useThemedStyles } from "../hooks/useThemedStyles";
-import { useTheme } from "../context/ThemeContext";
-import { getFontStyle } from "../utils/fonts";
-import Button from "../components/common/Button";
-import FormField from "../components/FormField";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { getFontStyle } from "@/utils/fonts";
+import Button from "@/components/common/Button";
+import FormField from "@/components/FormField";
 
 // Define Auth stack navigation param list
 type AuthStackParamList = {

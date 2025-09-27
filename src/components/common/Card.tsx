@@ -1,74 +1,38 @@
 // src/components/common/Card.tsx
 import React from "react";
-import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  ViewStyle,
-  StyleProp,
-} from "react-native";
-import { useTheme } from "@/context/ThemeContext";
-
-type CardVariant = "elevated" | "outlined" | "flat";
+import { View, StyleProp, ViewStyle, TouchableOpacity } from "react-native";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface CardProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-  variant?: CardVariant;
-  padding?: boolean;     // apply default padding
-  onPress?: () => void;  // Optional clickable
+  onPress?: () => void;
+  variant?: "elevated" | "outlined" | "filled";
 }
 
-const Card: React.FC<CardProps> = ({
-  children,
-  style,
-  variant = "elevated",
-  padding = true,
-  onPress,
-}) => {
-  const { colors, spacing, radius, shadows } = useTheme();
+export default function Card({ children, style, onPress, variant = "elevated" }: CardProps) {
+  const styles = useThemedStyles((t) => ({
+    container: {
+      backgroundColor: variant === "filled" ? t.colors.primary : t.colors.surface,
+      borderRadius: t.radius.md,
+      padding: t.spacing.md,
+      borderWidth: variant === "outlined" ? 1 : 0,
+      borderColor: variant === "outlined" ? t.colors.text.disabled : "transparent",
+      shadowColor: "#000",
+      shadowOpacity: variant === "elevated" ? 0.1 : 0,
+      shadowRadius: variant === "elevated" ? 4 : 0,
+      elevation: variant === "elevated" ? 3 : 0,
+      marginBottom: t.spacing.md,
+    },
+  }));
 
-  const baseStyle: ViewStyle = {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    marginBottom: spacing.md,
-  };
+  if (onPress) {
+    return (
+      <TouchableOpacity style={[styles.container, style]} onPress={onPress} activeOpacity={0.8}>
+        {children}
+      </TouchableOpacity>
+    );
+  }
 
-  const variantStyle: ViewStyle =
-    variant === "outlined"
-      ? {
-          borderWidth: 1,
-          borderColor: colors.border,
-        }
-      : variant === "elevated"
-      ? {
-          ...shadows.small,
-        }
-      : {}; // flat → no shadow or border
-
-  const contentStyle: ViewStyle = padding
-    ? { padding: spacing.md }
-    : {};
-
-  const card = (
-    <View
-      style={StyleSheet.flatten([baseStyle, variantStyle, contentStyle, style])}
-    >
-      {children}
-    </View>
-  );
-
-  return onPress ? (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={onPress}
-      style={{ borderRadius: radius.md }}
-    >
-      {card}
-    </TouchableOpacity>
-  ) : (
-    card
-  );
-};
-
-export default Card;
+  return <View style={[styles.container, style]}>{children}</View>;
+}

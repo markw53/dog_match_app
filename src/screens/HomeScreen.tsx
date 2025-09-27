@@ -6,23 +6,24 @@ import {
   Animated,
   FlatList,
 } from "react-native";
-import { useHomeScreen } from "../hooks/useHomeScreen";
-import { useTheme } from "../context/ThemeContext";
+import { useHomeScreen } from "@/hooks/useHomeScreen";
+import { useTheme } from "@/context/ThemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { useAuth } from "@/context/AuthContext";
 
-import ScreenWrapper from "../components/layout/ScreenWrapper";
-import { DogCard } from "../components/DogCard";
+import ScreenWrapper from "@/components/layout/ScreenWrapper";
+import { DogCard } from "@/components/DogCard";
 import { HomeHeader } from "@/components/Home/HomeHeader";
 import LoadingOverlay from "@/components/common/LoadingOverlay";
 import EmptyState from "@/components/common/EmptyState";
 import DogFilterModal from "@/components/DogFilterModal";
-import FAB from "@/components/common/FAB"; // Assuming you have a reusable FAB
+import FAB from "@/components/common/FAB";
 
-import { matchService } from "../services/matchService";
-import { useAuth } from "../context/AuthContext";
+import { matchService } from "@/services/matchService";
 
 type Dog = {
   id: string;
-  // Add other dog properties as needed
+  // extend later with Dog interface
 };
 
 import type { FlatListProps } from "react-native";
@@ -45,22 +46,30 @@ export default function HomeScreen({ navigation }: any) {
     handleRefresh,
   } = useHomeScreen();
 
-  const { colors, spacing } = useTheme();
+  const theme = useTheme();
   const { user } = useAuth();
 
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const scrollY = new Animated.Value(0);
 
+  // 🔹 Theme‑aware styles
+  const styles = useThemedStyles((t) => ({
+    listContent: {
+      padding: t.spacing.md,
+      paddingBottom: t.spacing.xxl * 2,
+    },
+  }));
+
   const handleContactDog = async (dogId: string) => {
     try {
-      await matchService.createMatch(user?.uid, dogId);
+      await matchService.createMatch(user?.uid, dogId, user?.uid); // adapt if you have myDog param
       navigation.navigate("Chat", { dogId });
     } catch (error) {
       console.error("Error contacting dog:", error);
     }
   };
 
-  const renderDogCard = ({ item: dog, index }: any) => {
+  const renderDogCard = ({ item: dog, index }: { item: Dog; index: number }) => {
     const scale = scrollY.interpolate({
       inputRange: [-1, 0, index * 290, (index + 1) * 290],
       outputRange: [1, 1, 1, 0.85],
@@ -101,17 +110,14 @@ export default function HomeScreen({ navigation }: any) {
         data={dogs}
         renderItem={renderDogCard}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{
-          padding: spacing.md,
-          paddingBottom: spacing.xxl * 2,
-        }}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
+            colors={[theme.colors.primary]}
+            tintColor={theme.colors.primary}
           />
         }
         ListEmptyComponent={

@@ -1,5 +1,5 @@
 // src/services/matchService.ts
-import { db } from "@/config/firebase";
+import { db } from "@/config/firebaseConfig";
 import {
   collection,
   doc,
@@ -18,11 +18,9 @@ import {
   QueryDocumentSnapshot,
   DocumentData,
 } from "firebase/firestore";
-import { MATCH_STATUS } from "@/utils/constants";
-import { Dog } from "@/types/dog";
-import { mapDog } from "./helpers/validateDog";
+import { MATCH_STATUS, COLLECTIONS } from "@/utils/constants";
 
-// 🔹 TS type from constants
+// ---- Types ----
 export type MatchStatus = typeof MATCH_STATUS[keyof typeof MATCH_STATUS];
 
 export interface Match {
@@ -38,9 +36,12 @@ export interface Match {
   lastActivity: Date;
   respondedAt?: Date;
   respondedBy?: string;
-  dog1?: Dog;
-  dog2?: Dog;
-  type?: "sent" | "received";
+  type?: "sent" | "received"; // for UI convenience
+}
+
+export interface MatchWithDogs extends Match {
+  dog1?: any; // You can replace with Dog type if imported
+  dog2?: any;
 }
 
 function convertTimestamp(ts: Timestamp | Date | undefined): Date {
@@ -48,26 +49,32 @@ function convertTimestamp(ts: Timestamp | Date | undefined): Date {
   return ts instanceof Timestamp ? ts.toDate() : ts;
 }
 
+// ---- Service ----
 export const matchService = {
-  // 🔹 Create new match
-  async createMatch(dog1Id: string, dog2Id: string, userId: string): Promise<Match> {
-    const [dog1Doc, dog2Doc] = await Promise.all([
-      getDoc(doc(db, "dogs", dog1Id)),
-      getDoc(doc(db, "dogs", dog2Id)),
+  // 🔹 Create a new match
+  async createMatch(dog1Id: string, dog2Id: string, userId: string): Promise<MatchWithDogs> {
+    // Fetch both dogs
+    const [dog1Snap, dog2Snap] = await Promise.all([
+      getDoc(doc(db, COLLECTIONS.DOGS, dog1Id)),
+      getDoc(doc(db, COLLECTIONS.DOGS, dog2Id)),
     ]);
 
-    const dog1 = mapDog(dog1Doc);
-    const dog2 = mapDog(dog2Doc);
+    if (!dog1Snap.exists() || !dog2Snap.exists()) {
+      throw new Error("One or both dogs not found");
+    }
 
-    if (dog1.ownerId !== userId) {
+    const dog1Data = dog1Snap.data();
+    const dog2Data = dog2Snap.data();
+
+    if (!dog1Data?.ownerId || dog1Data.ownerId !== userId) {
       throw new Error("Unauthorized to create match with this dog");
     }
 
-    const matchRef = await addDoc(collection(db, "matches"), {
+    const matchRef = await addDoc(collection(db, COLLECTIONS.MATCHES), {
       dog1Id,
       dog2Id,
-      dog1OwnerId: dog1.ownerId,
-      dog2OwnerId: dog2.ownerId,
+      dog1OwnerId: dog1Data.ownerId,
+      dog2OwnerId: dog2Data.ownerId,
       initiatedBy: userId,
       status: MATCH_STATUS.PENDING,
       createdAt: serverTimestamp(),
@@ -79,26 +86,25 @@ export const matchService = {
       id: matchRef.id,
       dog1Id,
       dog2Id,
-      dog1OwnerId: dog1.ownerId,
-      dog2OwnerId: dog2.ownerId,
+      dog1OwnerId: dog1Data.ownerId,
+      dog2OwnerId: dog2Data.ownerId,
       initiatedBy: userId,
       status: MATCH_STATUS.PENDING,
       createdAt: new Date(),
       updatedAt: new Date(),
       lastActivity: new Date(),
-      dog1,
-      dog2,
+      dog1: { id: dog1Id, ...dog1Data },
+      dog2: { id: dog2Id, ...dog2Data },
     };
   },
 
-  // 🔹 Update status
+  // 🔹 Update match status (typically accept/reject)
   async updateMatchStatus(matchId: string, userId: string, newStatus: MatchStatus): Promise<Match> {
-    const matchRef = doc(db, "matches", matchId);
-    const matchDoc = await getDoc(matchRef);
+    const matchRef = doc(db, COLLECTIONS.MATCHES, matchId);
+    const matchSnap = await getDoc(matchRef);
+    if (!matchSnap.exists()) throw new Error("Match not found");
 
-    if (!matchDoc.exists()) throw new Error("Match not found");
-    const matchData = matchDoc.data();
-
+    const matchData = matchSnap.data();
     if (matchData.dog2OwnerId !== userId) {
       throw new Error("Unauthorized to update this match");
     }
@@ -112,7 +118,7 @@ export const matchService = {
     });
 
     return {
-      id: matchDoc.id,
+      id: matchId,
       ...matchData,
       status: newStatus,
       updatedAt: new Date(),
@@ -120,39 +126,46 @@ export const matchService = {
     } as Match;
   },
 
-  // 🔹 Delete
+  // 🔹 Delete a match
   async deleteMatch(matchId: string, userId: string): Promise<boolean> {
-    const matchRef = doc(db, "matches", matchId);
-    const matchDoc = await getDoc(matchRef);
+    const matchRef = doc(db, COLLECTIONS.MATCHES, matchId);
+    const matchSnap = await getDoc(matchRef);
 
-    if (!matchDoc.exists()) {
-      throw new Error("Match not found");
-    }
+    if (!matchSnap.exists()) throw new Error("Match not found");
 
-    const matchData = matchDoc.data();
-
+    const matchData = matchSnap.data();
     if (matchData.dog1OwnerId !== userId && matchData.dog2OwnerId !== userId) {
-      throw new Error("Unauthorized to delete this match");
+      throw new Error("Unauthorized to delete match");
     }
 
     await deleteDoc(matchRef);
     return true;
   },
 
-  // 🔹 Get matches for user
-  async getUserMatches(userId: string, options: { status?: MatchStatus; lastDoc?: QueryDocumentSnapshot; limitCount?: number } = {}) {
+  // 🔹 Get user matches (sent + received)
+  async getUserMatches(
+    userId: string,
+    options: { status?: MatchStatus; lastDoc?: QueryDocumentSnapshot; limitCount?: number } = {}
+  ): Promise<{ matches: Match[]; lastDoc: QueryDocumentSnapshot | null; hasMore: boolean }> {
     const { status, lastDoc, limitCount = 10 } = options;
 
+    // Better: use "in" queries to filter out deleted
+    const allowedStatuses: MatchStatus[] = Object.values(MATCH_STATUS).filter((s) => s !== MATCH_STATUS.DELETED);
+
     let baseQuery = query(
-      collection(db, "matches"),
-      where("status", "!=", MATCH_STATUS.DELETED),
-      orderBy("status"),
+      collection(db, COLLECTIONS.MATCHES),
       orderBy("lastActivity", "desc"),
       limit(limitCount)
     );
 
-    if (status) baseQuery = query(baseQuery, where("status", "==", status));
-    if (lastDoc) baseQuery = query(baseQuery, startAfter(lastDoc));
+    if (status) {
+      baseQuery = query(baseQuery, where("status", "==", status));
+    } else {
+      baseQuery = query(baseQuery, where("status", "in", allowedStatuses));
+    }
+    if (lastDoc) {
+      baseQuery = query(baseQuery, startAfter(lastDoc));
+    }
 
     const [sent, received] = await Promise.all([
       getDocs(query(baseQuery, where("dog1OwnerId", "==", userId))),
@@ -184,29 +197,26 @@ export const matchService = {
     };
   },
 
-  // 🔹 Detailed match (with both dogs validated)
-  async getMatchDetails(matchId: string): Promise<Match> {
-    const matchDoc = await getDoc(doc(db, "matches", matchId));
-    if (!matchDoc.exists()) throw new Error("Match not found");
-    const matchData = matchDoc.data();
+  // 🔹 Get full details of a match (with dogs)
+  async getMatchDetails(matchId: string): Promise<MatchWithDogs> {
+    const matchSnap = await getDoc(doc(db, COLLECTIONS.MATCHES, matchId));
+    if (!matchSnap.exists()) throw new Error("Match not found");
 
-    const [dog1Doc, dog2Doc] = await Promise.all([
-      getDoc(doc(db, "dogs", matchData.dog1Id)),
-      getDoc(doc(db, "dogs", matchData.dog2Id)),
+    const matchData = matchSnap.data();
+    const [dog1Snap, dog2Snap] = await Promise.all([
+      getDoc(doc(db, COLLECTIONS.DOGS, matchData.dog1Id)),
+      getDoc(doc(db, COLLECTIONS.DOGS, matchData.dog2Id)),
     ]);
 
-    const dog1 = mapDog(dog1Doc);
-    const dog2 = mapDog(dog2Doc);
-
     return {
-      id: matchDoc.id,
+      id: matchSnap.id,
       ...matchData,
-      dog1,
-      dog2,
+      dog1: dog1Snap.exists() ? { id: dog1Snap.id, ...dog1Snap.data() } : undefined,
+      dog2: dog2Snap.exists() ? { id: dog2Snap.id, ...dog2Snap.data() } : undefined,
       createdAt: convertTimestamp(matchData.createdAt),
       updatedAt: convertTimestamp(matchData.updatedAt),
       lastActivity: convertTimestamp(matchData.lastActivity),
       respondedAt: convertTimestamp(matchData.respondedAt),
-    } as Match;
+    } as MatchWithDogs;
   },
 };

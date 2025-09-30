@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import * as Location from "expo-location";
 import { LOCATION_CONSTANTS } from "@/utils/constants";
-import { calculateAge } from "@/utils/helpers";
+import { calculateAge } from "@/utils";
 
 // 🔹 Types
 export interface Coordinates {
